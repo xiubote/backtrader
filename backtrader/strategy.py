@@ -1469,7 +1469,7 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
         return self._sizer.getsizing(data, isbuy=isbuy)
     
     @classmethod
-    def backtest(cls, dataname, fromdate, todate, frequency, security, password, cash, commission = 1, margin = 1, automargin = 0.15, user = 'root'):
+    def backtest(cls, dataname, fromdate, todate, frequency, security, cash, commission = 1, margin = 1, automargin = 0.15):
         cerebro = bt.Cerebro()
         cerebro.addstrategy(cls)
         for i,j in enumerate(dataname):
@@ -1478,8 +1478,6 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
                                           todate = todate,
                                           frequency = frequency,
                                           security = security[i],
-                                          password = password,
-                                          user = user
                                           )
             cerebro.adddata(data_feed, name = j)
         cerebro.broker.setcash(cash)
@@ -1489,7 +1487,7 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
         
         
     @classmethod   
-    def monitor(cls, dataname, dataname_live, fromdate, frequency, security, password, cash, commission = 1, margin = 1, automargin = 0.15, user = 'root'):    
+    def monitor(cls, dataname, dataname_live, fromdate, frequency, security, cash, commission = 1, margin = 1, automargin = 0.15):    
         cerebro = bt.Cerebro(live = True)
         cerebro.addstrategy(cls)
 
@@ -1501,8 +1499,6 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
                                              frequency = frequency,
                                              security = security[i],
                                              sleep = sleep,
-                                             password = password,
-                                             user = user
                                              )
             cerebro.adddata(data_feed, name = j)
         cerebro.broker.setcash(cash)
