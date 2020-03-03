@@ -1467,7 +1467,49 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
         '''
         data = data if data is not None else self.datas[0]
         return self._sizer.getsizing(data, isbuy=isbuy)
+    
+    @classmethod
+    def backtest(cls, dataname, fromdate, todate, frequency, security, password, cash, commission = 1, margin = 1, automargin = 0.15, user = 'root'):
+        cerebro = bt.Cerebro()
+        cerebro.addstrategy(cls)
+        for i,j in enumerate(dataname):
+            data_feed = bt.feeds.MySQLData(dataname = j,
+                                          fromdate = fromdate,  
+                                          todate = todate,
+                                          frequency = frequency,
+                                          security = security[i],
+                                          password = password,
+                                          user = user
+                                          )
+            cerebro.adddata(data_feed, name = j)
+        cerebro.broker.setcash(cash)
+        cerebro.broker.setcommission(commission = commission, margin = margin, automargin = automargin)
+        cerebro.addanalyzer(bt.analyzers.Performance)
+        cerebro.run()
+        
+        
+    @classmethod   
+    def monitor(cls, dataname, dataname_live, fromdate, frequency, security, password, cash, commission = 1, margin = 1, automargin = 0.15, user = 'root'):    
+        cerebro = bt.Cerebro(live = True)
+        cerebro.addstrategy(cls)
 
+        for i,j in enumerate(dataname):
+            sleep = 1 if i==0 else 0
+            data_feed = bt.feeds.WindDataLive(dataname = j,
+                                             dataname_live = dataname_live[i],
+                                             fromdate = fromdate,
+                                             frequency = frequency,
+                                             security = security[i],
+                                             sleep = sleep,
+                                             password = password,
+                                             user = user
+                                             )
+            cerebro.adddata(data_feed, name = j)
+        cerebro.broker.setcash(cash)
+        cerebro.broker.setcommission(commission = commission, margin = margin, automargin = automargin)
+        cerebro.addanalyzer(bt.analyzers.Performance)
+        cerebro.run()
+        
 
 class MetaSigStrategy(Strategy.__class__):
 
