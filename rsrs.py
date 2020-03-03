@@ -55,21 +55,27 @@ class RSRS_Strategy(bt.Strategy):
             self.datas[i].r2 = rsrs_indicator(self.datas[i],rsrs_window = self.params.rsrs_window).lines.r2
             self.datas[i].zscore = rsrs_zscore_indicator(self.datas[i], zscore_window = self.params.zscore_window, rsrs_window = self.params.rsrs_window)
 
-#    def notify_order(self, order):
+    def notify_order(self, order):
+        if order.status in [order.Submitted, order.Accepted]:
+            if self.datas[0].datetime.date(0) < datetime.date.today():
+                pass
+            else:
+                print('发送信号')
+                print([str(self.datas[0].datetime.datetime(0)), order.data._name,order.size,self.getposition(order.data).size])
 #        if order.status in [order.Completed]:
 #            if order.isbuy():
 #                self.log('BUY EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
 #                    (order.executed.price,order.executed.value,order.executed.comm))
-#                #print(order.p.exectype)
+#                
 #            else:  
 #                self.log('SELL EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
 #                    (order.executed.price,order.executed.value,order.executed.comm))  
-#        self.order = None
+
 
     def next(self):
         
-        self.log('Close, %.2f' % self.data.close[0])
-        self.log('Close, %.2f' % self.datas[1].close[0])
+#        self.log('Close, %.2f' % self.data.close[0])
+#        self.log('Close, %.2f' % self.datas[1].close[0])
         
         zscore = self.data.zscore[0]
         judge = self.p.judge
@@ -114,13 +120,11 @@ def RSRS_backtest():
     fromdate = datetime.datetime(2017,2,28)
     todate = datetime.date(2020,2,28)
     frequency = '30min'
-    password = '58604496'
     cash = 3200
     commission = 1
     margin = 1
     automargin = 0.15
-    
-    RSRS_Strategy.backtest(dataname, fromdate, todate, frequency, security, password, cash, commission, margin, automargin)
+    RSRS_Strategy.backtest(dataname, fromdate, todate, frequency, security, cash, commission, margin, automargin)
     
         
 def RSRS_monitor():
@@ -129,25 +133,14 @@ def RSRS_monitor():
     dataname_live = ['000300.SH','if.CFE']
     fromdate = datetime.datetime(2017,2,28)
     frequency = '30min'
-    password = '58604496'
     cash = 3200
     commission = 1
     margin = 1
     automargin = 0.15
-    RSRS_Strategy.monitor(dataname, dataname_live, fromdate, frequency, security, password, cash, commission, margin, automargin)
-    #Test_Strategy.monitor(dataname, dataname_live, fromdate, frequency, security, password, cash)
+    RSRS_Strategy.monitor(dataname, dataname_live, fromdate, frequency, security, cash, commission, margin, automargin)
+    #Test_Strategy.monitor(dataname, dataname_live, fromdate, '1min', security, cash)
     
 if __name__ == '__main__':  
     
     RSRS_backtest()
     #RSRS_monitor()
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
