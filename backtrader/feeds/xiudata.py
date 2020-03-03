@@ -10,6 +10,13 @@ import datetime
 import time
 from WindPy import w
         
+config={
+       'host':'127.0.0.1',
+       'port':3306,
+       'user':'root',
+       'password':'58604496',
+       }
+
 
 class MySQLData(DataBase):
 
@@ -24,8 +31,7 @@ class MySQLData(DataBase):
         ('volume', -1),
         ('frequency', 'day'),
         ('security', 'None'),
-        ('user', 'root'),
-        ('password', '58604496'),
+
         
     )
 
@@ -39,8 +45,10 @@ class MySQLData(DataBase):
         start_date = str(self.p.fromdate.date())
         end_date = str(self.p.todate.date())
         frequency = self.p.frequency
-        user = self.p.user
-        sql_password = self.p.password
+        user = config['user']
+        sql_password = config['password']
+        host = config['host']
+        port = config['port']
         c = 'd_' + frequency + ',open,high,low,close,volume'
 #        if self.p.security == 'None':
 #            #自动识别有bug，正在修复，谨慎使用
@@ -79,7 +87,7 @@ class MySQLData(DataBase):
             else:
                 sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"' and d_"+ frequency+"<'"+end_date+"'"
                 self.security = 'index'
-        self.conn = pymysql.connect(user = user, password = sql_password, database = 'md_' + self.security)
+        self.conn = pymysql.connect(host = host, user = user, password = sql_password, database = 'md_' + self.security, port = port)
         self.cursor = self.conn.cursor()
         self.cursor.execute(sql)
         self.description = self.cursor.description
@@ -102,7 +110,158 @@ class MySQLData(DataBase):
             self.conn.close()
             return False
 
-        
+class WindDataLive(DataBase):
+    from WindPy import w
+    w.start()
+    params = (
+        ('nocase', True),
+        ('dataname', 'None'),
+        ('dataname_live', 'None'),
+        ('datetime', None),
+        ('open', -1),
+        ('high', -1),
+        ('low', -1),
+        ('close', -1),
+        ('volume', -1),
+        ('frequency', 'day'),
+        ('security', 'None'),
+        ('sleep', 1),
+    )
+
+
+    def islive(self):
+        '''Returns ``True`` to notify ``Cerebro`` that preloading and runonce
+        should be deactivated'''
+        return True
+    
+    def live(self):
+        return True
+
+
+    def __init__(self):
+        super().__init__()
+        self.backtest = True
+
+    def start(self):
+        super().start()
+        self._idx = -1
+        s = self.p.dataname
+        start_date = str(self.p.fromdate.date())
+        frequency = self.p.frequency
+        user = config['user']
+        sql_password = config['password']
+        host = config['host']
+        port = config['port']
+        c = 'd_' + frequency + ',open,high,low,close,volume'
+
+        if self.p.security == 'stock':
+            if self.p.frequency == 'day':
+                sql = "select "+c+" from md_day where stock = '"+ s[2:] +"' and d_day > '"+start_date+"'"
+                self.security = 'stock'
+            else:
+                sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"'"  
+                self.security = 'stock'
+        elif self.p.security == 'future':
+            if self.p.frequency == 'day':
+                sql = "select "+c+" from md_day where contract = '"+ s +"' and d_day > '"+start_date+"'"
+                self.security = 'future'
+            else:
+                sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"'"
+                self.security = 'future'  
+        elif self.p.security == 'index':
+            if self.p.frequency == 'day':
+                sql = "select "+c+" from md_day where index = '"+ s[2:] +"' and d_day > '"+start_date+"'"
+                self.security = 'index'
+            else:
+                sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"'"
+                self.security = 'index'
+        self.conn = pymysql.connect(host = host, user = user, password = sql_password, database = 'md_' + self.security, port = port)
+        self.cursor = self.conn.cursor()
+        self.cursor.execute(sql)
+        self.description = self.cursor.description
+
+
+    def _load(self):
+
+
+        self._idx += 1
+        if self.backtest:
+            try:
+                bar = self.cursor.fetchone()
+                while None in bar:
+                    bar = self.cursor.fetchone()
+                self.lines.datetime[0] = date2num(bar[0])
+                self.lines.open[0] = bar[1]
+                self.lines.high[0] = bar[2]
+                self.lines.low[0] = bar[3]
+                self.lines.close[0] = bar[4]
+                self.lines.volume[0] = bar[5]
+                self.temp = bar[0]
+                return True
+            except TypeError:
+                self.backtest = False
+                self.conn.close()
+
+
+
+        if self.p.sleep == 1:
+            if datetime.datetime.now().time() > datetime.time(15,1,0):
+                market_opentime = datetime.datetime.combine(datetime.date.today()+datetime.timedelta(days=1),datetime.time(9,30,0))
+                print('wait for market opening')
+                time.sleep((market_opentime-datetime.datetime.now()).seconds)
+                
+            elif datetime.datetime.now() < datetime.datetime.combine(datetime.date.today(),datetime.time(9,30,0)):
+                market_opentime = datetime.datetime.combine(datetime.date.today(),datetime.time(9,30,0))
+                print('wait for market opening')
+                time.sleep((market_opentime-datetime.datetime.now()).seconds)
+            else:
+                if self.p.frequency == 'day':
+                    time.sleep(19800)
+                else:
+                    print('等待数据')
+                    time.sleep(60*int(self.p.frequency[0:-3]))
+        elif self.p.sleep == 0:
+            pass
+                
+        s = self.p.dataname
+        frequency = self.p.frequency
+        now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if self.p.security == 'stock':
+            if frequency != 'day':
+                data_wind = w.wsi(s, "open,high,low,close,volume", str(self.temp), now_time, "BarSize="+frequency+";periodstart=09:00:00;periodend="+datetime.datetime.now().strftime('%H:%M:%S'))                     
+            else:
+                data_wind = w.wsd(s, "open,high,low,close,volume", str(self.temp), now_time, "PriceAdj=B")
+            
+        elif self.p.security == 'future':
+            if frequency != 'day':
+                data_wind = w.wsi(s, "open,high,low,close,volume", str(self.temp), now_time, "BarSize="+frequency+";periodstart=09:00:00;periodend="+datetime.datetime.now().strftime('%H:%M:%S'))
+            else:
+                data_wind = w.wsd(s, "open,high,low,close,volume", str(self.temp), now_time, "PriceAdj=B")
+                
+        elif self.p.security == 'index':
+            if frequency != 'day':
+                data_wind = w.wsi(s, "open,high,low,close,volume", str(self.temp), now_time, "BarSize="+frequency+";periodstart=09:00:00;periodend="+datetime.datetime.now().strftime('%H:%M:%S'))
+            else:
+                data_wind = w.wsd(s, "open,high,low,close,volume", str(self.temp), now_time, "PriceAdj=B")    
+        self.times = data_wind.Times
+        self.data = data_wind.Data
+        if len(self.times) < 2:
+            #print('中午休市，等待数据')
+            return None
+        bar = [self.times[1]]
+        for i in self.data:
+            if np.isnan(i[1]) == True:
+                #print('停牌了')
+                return None
+            bar.append(i[1])
+        self.lines.datetime[0] = date2num(bar[0])
+        self.lines.open[0] = bar[1]
+        self.lines.high[0] = bar[2]
+        self.lines.low[0] = bar[3]
+        self.lines.close[0] = bar[4]
+        self.lines.volume[0] = bar[5]
+        self.temp = bar[0]
+        return True      
 
         
 class WindDataLive2(DataBase):
@@ -120,8 +279,6 @@ class WindDataLive2(DataBase):
         ('frequency', 'day'),
         ('security', 'None'),
         ('sleep', 1),
-        ('user', 'root'),
-        ('password', '58604496'),
     )
 
 
@@ -249,157 +406,7 @@ class WindDataLive2(DataBase):
         return True
 
         
-class WindDataLive(DataBase):
-    from WindPy import w
-    w.start()
-    params = (
-        ('nocase', True),
-        ('dataname', 'None'),
-        ('dataname_live', 'None'),
-        ('datetime', None),
-        ('open', -1),
-        ('high', -1),
-        ('low', -1),
-        ('close', -1),
-        ('volume', -1),
-        ('frequency', 'day'),
-        ('security', 'None'),
-        ('sleep', 1),
-        ('user', 'root'),
-        ('password', '58604496'),
-    )
 
-
-    def islive(self):
-        '''Returns ``True`` to notify ``Cerebro`` that preloading and runonce
-        should be deactivated'''
-        return True
-    
-    def live(self):
-        return True
-
-
-    def __init__(self):
-        super().__init__()
-        self.backtest = True
-
-    def start(self):
-        super().start()
-        self._idx = -1
-        s = self.p.dataname
-        start_date = str(self.p.fromdate.date())
-        frequency = self.p.frequency
-        user = self.p.user
-        sql_password = self.p.password
-        c = 'd_' + frequency + ',open,high,low,close,volume'
-
-        if self.p.security == 'stock':
-            if self.p.frequency == 'day':
-                sql = "select "+c+" from md_day where stock = '"+ s[2:] +"' and d_day > '"+start_date+"'"
-                self.security = 'stock'
-            else:
-                sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"'"  
-                self.security = 'stock'
-        elif self.p.security == 'future':
-            if self.p.frequency == 'day':
-                sql = "select "+c+" from md_day where contract = '"+ s +"' and d_day > '"+start_date+"'"
-                self.security = 'future'
-            else:
-                sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"'"
-                self.security = 'future'  
-        elif self.p.security == 'index':
-            if self.p.frequency == 'day':
-                sql = "select "+c+" from md_day where index = '"+ s[2:] +"' and d_day > '"+start_date+"'"
-                self.security = 'index'
-            else:
-                sql = "select "+c+" from md_" + frequency + "_" + s +" where d_"+ frequency+">'"+start_date+"'"
-                self.security = 'index'
-        self.conn = pymysql.connect(user = user, password = sql_password, database = 'md_' + self.security)
-        self.cursor = self.conn.cursor()
-        self.cursor.execute(sql)
-        self.description = self.cursor.description
-
-
-    def _load(self):
-
-
-        self._idx += 1
-        if self.backtest:
-            try:
-                bar = self.cursor.fetchone()
-                while None in bar:
-                    bar = self.cursor.fetchone()
-                self.lines.datetime[0] = date2num(bar[0])
-                self.lines.open[0] = bar[1]
-                self.lines.high[0] = bar[2]
-                self.lines.low[0] = bar[3]
-                self.lines.close[0] = bar[4]
-                self.lines.volume[0] = bar[5]
-                self.temp = bar[0]
-                return True
-            except TypeError:
-                self.backtest = False
-
-
-
-        if self.p.sleep == 1:
-            if datetime.datetime.now().time() > datetime.time(15,1,0):
-                market_opentime = datetime.datetime.combine(datetime.date.today()+datetime.timedelta(days=1),datetime.time(9,30,0))
-                print('wait for market opening')
-                time.sleep((market_opentime-datetime.datetime.now()).seconds)
-                
-            elif datetime.datetime.now() < datetime.datetime.combine(datetime.date.today(),datetime.time(9,30,0)):
-                market_opentime = datetime.datetime.combine(datetime.date.today(),datetime.time(9,30,0))
-                print('wait for market opening')
-                time.sleep((market_opentime-datetime.datetime.now()).seconds)
-            else:
-                if self.p.frequency == 'day':
-                    time.sleep(19800)
-                else:
-                    print('等待数据')
-                    time.sleep(60*int(self.p.frequency[0:-3]))
-        elif self.p.sleep == 0:
-            pass
-                
-        s = self.p.dataname
-        frequency = self.p.frequency
-        now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        if self.p.security == 'stock':
-            if frequency != 'day':
-                data_wind = w.wsi(s, "open,high,low,close,volume", str(self.temp), now_time, "BarSize="+frequency+";periodstart=09:00:00;periodend="+datetime.datetime.now().strftime('%H:%M:%S'))                     
-            else:
-                data_wind = w.wsd(s, "open,high,low,close,volume", str(self.temp), now_time, "PriceAdj=B")
-            
-        elif self.p.security == 'future':
-            if frequency != 'day':
-                data_wind = w.wsi(s, "open,high,low,close,volume", str(self.temp), now_time, "BarSize="+frequency+";periodstart=09:00:00;periodend="+datetime.datetime.now().strftime('%H:%M:%S'))
-            else:
-                data_wind = w.wsd(s, "open,high,low,close,volume", str(self.temp), now_time, "PriceAdj=B")
-                
-        elif self.p.security == 'index':
-            if frequency != 'day':
-                data_wind = w.wsi(s, "open,high,low,close,volume", str(self.temp), now_time, "BarSize="+frequency+";periodstart=09:00:00;periodend="+datetime.datetime.now().strftime('%H:%M:%S'))
-            else:
-                data_wind = w.wsd(s, "open,high,low,close,volume", str(self.temp), now_time, "PriceAdj=B")    
-        self.times = data_wind.Times
-        self.data = data_wind.Data
-        if len(self.times) < 2:
-            #print('中午休市，等待数据')
-            return None
-        bar = [self.times[1]]
-        for i in self.data:
-            if np.isnan(i[1]) == True:
-                #print('停牌了')
-                return None
-            bar.append(i[1])
-        self.lines.datetime[0] = date2num(bar[0])
-        self.lines.open[0] = bar[1]
-        self.lines.high[0] = bar[2]
-        self.lines.low[0] = bar[3]
-        self.lines.close[0] = bar[4]
-        self.lines.volume[0] = bar[5]
-        self.temp = bar[0]
-        return True
 
 
             
