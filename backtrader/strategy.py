@@ -1469,9 +1469,9 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
         return self._sizer.getsizing(data, isbuy=isbuy)
     
     @classmethod
-    def backtest(cls, dataname, fromdate, todate, frequency, security, cash, commission = 1, margin = 1, automargin = 0.15):
+    def backtest(cls, dataname, fromdate, todate, frequency, security, cash, commission = 1, margin = 1, automargin = 0.15, *args, **kwargs):
         cerebro = bt.Cerebro()
-        cerebro.addstrategy(cls)
+        cerebro.addstrategy(cls, *args, **kwargs)
         for i,j in enumerate(dataname):
             data_feed = bt.feeds.MySQLData(dataname = j,
                                           fromdate = fromdate,  
@@ -1487,9 +1487,9 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
         
         
     @classmethod   
-    def monitor(cls, dataname, dataname_live, fromdate, frequency, security, cash, commission = 1, margin = 1, automargin = 0.15):    
+    def monitor(cls, dataname, dataname_live, fromdate, frequency, security, cash, commission = 1, margin = 1, automargin = 0.15, *args, **kwargs):    
         cerebro = bt.Cerebro(live = True)
-        cerebro.addstrategy(cls)
+        cerebro.addstrategy(cls, *args, **kwargs)
 
         for i,j in enumerate(dataname):
             sleep = 1 if i==0 else 0
